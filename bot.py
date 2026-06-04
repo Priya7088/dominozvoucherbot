@@ -5,7 +5,7 @@ import time
 from telebot import types
 
 # --- SETTINGS ---
-BOT_TOKEN = '8522964450:AAHFceuLIFr3PNMFaxAu5X70zMcdM6I0ahg'
+BOT_TOKEN = '8522964450:AAFPAOqiv6cpt2lF8JhRT6_UGw_1LjQwE7U'
 ADMIN_ID = 'YOUR_TELEGRAM_ID_HERE' 
 ADMIN_USERNAME = "@YourUsername" 
 ACCESS_CODE = "IR83JLLPcbf4Ur4axS0m"
