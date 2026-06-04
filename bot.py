@@ -1,67 +1,128 @@
-import logging
-import asyncio
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+import telebot
+import sqlite3
+import os
+import time
+from telebot import types
 
-# YAHAN APNA BOTFATHER WALA API TOKEN PASTE KAREIN
-TOKEN = '8522964450:AAHFceuLIFr3PNMFaxAu5X70zMcdM6I0ahg'
-PASSWORD = "123456"
+# --- SETTINGS ---
+BOT_TOKEN = '8522964450:AAHFceuLIFr3PNMFaxAu5X70zMcdM6I0ahg'
+ADMIN_ID = 'YOUR_TELEGRAM_ID_HERE' 
+ADMIN_USERNAME = "@YourUsername" 
+ACCESS_CODE = "IR83JLLPcbf4Ur4axS0m"
+MAX_LIMIT = 20 
 
-# 100 Codes ki list (Generator Logic)
-mereCodes = [
-    {"code": "100378118471001", "pin": "154001", "status": "Valid"},
-    {"code": "100378118471002", "pin": "154002", "status": "Valid"},
-    {"code": "100378118471003", "pin": "154003", "status": "Valid"},
-    {"code": "100378118471004", "pin": "154004", "status": "Invalid"},
-    {"code": "100378118471005", "pin": "154005", "status": "Valid"},
-    {"code": "100378118471006", "pin": "154006", "status": "Valid"},
-    {"code": "100378118471007", "pin": "154007", "status": "Valid"},
-    {"code": "100378118471008", "pin": "154008", "status": "Invalid"},
-    {"code": "100378118471009", "pin": "154009", "status": "Valid"},
-    {"code": "100378118471010", "pin": "154010", "status": "Valid"}
-    # Aap ismein baaki codes isi tarah add kar sakte hain
-]
+bot = telebot.TeleBot(BOT_TOKEN)
+user_data = {}
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-user_logged_in = {}
+# --- DATABASE & FILE LOGIC ---
+def init_db():
+    conn = sqlite3.connect('generator_logs.db')
+    cursor = conn.cursor()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS generated_codes 
+                      (id INTEGER PRIMARY KEY, voucher TEXT, pin TEXT, user TEXT)''')
+    conn.commit()
+    conn.close()
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Domino Generator Bot v1.0\nLogin ke liye: /login 123456")
+def log_to_db(voucher, pin, user):
+    conn = sqlite3.connect('generator_logs.db')
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO generated_codes (voucher, pin, user) VALUES (?, ?, ?)", (voucher, pin, user))
+    conn.commit()
+    conn.close()
 
-async def login(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if context.args and context.args[0] == PASSWORD:
-        user_logged_in[update.effective_user.id] = True
-        await update.message.reply_text("✅ Login Successful! /generate <count> ka use karein.")
-    else:
-        await update.message.reply_text("❌ Login Failed!")
+def get_next_code():
+    if not os.path.exists('codes.txt'): return None
+    with open('codes.txt', 'r') as f:
+        lines = f.readlines()
+    if not lines: return None
+    line = lines[0].strip()
+    if ':' not in line: return None
+    code, pin = line.split(':')
+    with open('codes.txt', 'w') as f:
+        f.writelines(lines[1:])
+    return {"code": code, "pin": pin}
 
-async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Yeh aapki QR photo file hai
-    await update.message.reply_photo(photo=open('1000759882.jpg', 'rb'), caption="Payment QR: Scan and send screenshot.")
+init_db()
 
-async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not user_logged_in.get(update.effective_user.id):
-        await update.message.reply_text("🔒 Login zaroori hai.")
-        return
+# --- BOT LOGIC ---
+def get_main_markup():
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton("Generate Codes", callback_data="gen_menu"),
+        types.InlineKeyboardButton("Pay ₹5000 (QR)", callback_data="pay_now"),
+        types.InlineKeyboardButton("Stop", callback_data="stop_gen"),
+        types.InlineKeyboardButton("Copy Codes", callback_data="copy_all"),
+        types.InlineKeyboardButton("Support", url=f"https://t.me/{ADMIN_USERNAME.replace('@','')}")
+    )
+    return markup
 
-    try:
-        count = int(context.args[0])
-        await update.message.reply_text(f"⚙️ {count} codes generate ho rahe hain... (5 sec delay per code)")
-        
-        for i in range(count):
-            data = mereCodes[i % len(mereCodes)]
-            await asyncio.sleep(5) # 5 Second ka delay
-            status = "✅ VALID" if data["status"] == "Valid" else "❌ INVALID"
-            response = f"[{i+1}] Code: {data['code']}\nPIN: {data['pin']}\nStatus: {status}"
-            await update.message.reply_text(response)
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    bot.reply_to(message, "नमस्ते! Domino Generator कंट्रोल पैनल:", reply_markup=get_main_markup())
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback_handler(call):
+    user_id = call.message.chat.id
+    if call.data == "gen_menu":
+        user_data[user_id] = {'step': 'waiting_count', 'logs': user_data.get(user_id, {}).get('logs', '')}
+        bot.send_message(user_id, f"कितने कोड जनरेट करने हैं? (Max {MAX_LIMIT}):")
+    
+    elif call.data == "pay_now":
+        if os.path.exists('qr.png'):
+            with open('qr.png', 'rb') as photo:
+                bot.send_photo(user_id, photo, caption="₹5000 का भुगतान करें। पेमेंट स्क्रीनशॉट मुझे भेजें, मैं आपको Access Code दूंगा।")
+        else:
+            bot.send_message(user_id, "QR कोड उपलब्ध नहीं है, एडमिन से संपर्क करें।")
             
-    except Exception as e:
-        await update.message.reply_text("Error: /generate <number> sahi dalein.")
+    elif call.data == "stop_gen":
+        if user_id in user_data: user_data[user_id]['step'] = 'stopped'
+        bot.answer_callback_query(call.id, "Generation रोक दी गई है।")
+    elif call.data == "copy_all":
+        logs = user_data.get(user_id, {}).get('logs', "कोई कोड नहीं है।")
+        bot.send_message(user_id, f"कॉपी के लिए सभी कोड्स:\n\n{logs}")
 
-if __name__ == '__main__':
-    application = ApplicationBuilder().token(TOKEN).build()
-    application.add_handler(CommandHandler('start', start))
-    application.add_handler(CommandHandler('login', login))
-    application.add_handler(CommandHandler('buy', buy))
-    application.add_handler(CommandHandler('generate', generate))
-    application.run_polling()
+@bot.message_handler(func=lambda message: user_data.get(message.chat.id, {}).get('step') == 'waiting_count')
+def get_count(message):
+    user_id = message.chat.id
+    try:
+        count = int(message.text)
+        if count > MAX_LIMIT:
+            bot.reply_to(message, f"सीमा पार! कृपया {MAX_LIMIT} या उससे कम संख्या डालें।")
+            return
+        user_data[user_id].update({'count': count, 'step': 'waiting_code'})
+        bot.reply_to(message, "20-डिजिट का Access Code दर्ज करें:")
+    except ValueError:
+        bot.reply_to(message, "कृपया केवल संख्या लिखें।")
+
+@bot.message_handler(func=lambda message: user_data.get(message.chat.id, {}).get('step') == 'waiting_code')
+def verify_code(message):
+    user_id = message.chat.id
+    if message.text == ACCESS_CODE:
+        bot.reply_to(message, "Access Granted! जनरेशन शुरू हो रही है...")
+        bot.send_message(ADMIN_ID, f"🔔 अलर्ट: यूजर @{message.from_user.username} ने जनरेशन शुरू की।")
+        
+        count = user_data[user_id]['count']
+        for i in range(count):
+            if user_data.get(user_id, {}).get('step') == 'stopped': break
+            
+            data = get_next_code()
+            if not data:
+                bot.send_message(user_id, "❌ स्टॉक खत्म हो गया है! एडमिन से संपर्क करें।")
+                break
+                
+            bot.send_message(user_id, f"> [⏳] कोड {i+1} प्रोसेसिंग...")
+            time.sleep(5)
+            log_to_db(data['code'], data['pin'], message.from_user.username)
+            result = f"Voucher: {data['code']} | PIN: {data['pin']} | Balance: ₹100"
+            user_data[user_id]['logs'] += result + "\n"
+            bot.send_message(user_id, f"> {result}")
+        else:
+            bot.send_message(user_id, "✅ बैच पूरा हुआ।", reply_markup=get_main_markup())
+    else:
+        bot.reply_to(message, "गलत Access Code! फिर से प्रयास करें।")
+
+while True:
+    try:
+        bot.polling(none_stop=True)
+    except Exception as e:
+        time.sleep(15)
