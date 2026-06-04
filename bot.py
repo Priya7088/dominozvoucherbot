@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 
 # YAHAN APNA BOTFATHER WALA API TOKEN PASTE KAREIN
-TOKEN = 'PASTE_YOUR_API_TOKEN_HERE'
+TOKEN = '8522964450:AAHFceuLIFr3PNMFaxAu5X70zMcdM6I0ahg'
 PASSWORD = "123456"
 
 # 100 Codes ki list (Generator Logic)
