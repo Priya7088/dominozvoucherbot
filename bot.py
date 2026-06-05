@@ -6,8 +6,8 @@ from telebot import types
 
 # --- SETTINGS ---
 BOT_TOKEN = '8522964450:AAFPAOqiv6cpt2lF8JhRT6_UGw_1LjQwE7U'
-ADMIN_ID = 'YOUR_TELEGRAM_ID_HERE' 
-ADMIN_USERNAME = "@YourUsername" 
+ADMIN_ID = '1102140969' 
+ADMIN_USERNAME = "@CuteGirl21459" 
 ACCESS_CODE = "IR83JLLPcbf4Ur4axS0m"
 MAX_LIMIT = 20 
 
@@ -18,7 +18,7 @@ user_data = {}
 def init_db():
     conn = sqlite3.connect('generator_logs.db')
     cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS generated_codes 
+    cursor. Execute('''CREATE TABLE IF NOT EXISTS generated codes 
                       (id INTEGER PRIMARY KEY, voucher TEXT, pin TEXT, user TEXT)''')
     conn.commit()
     conn.close()
@@ -98,28 +98,37 @@ def get_count(message):
 def verify_code(message):
     user_id = message.chat.id
     if message.text == ACCESS_CODE:
-        bot.reply_to(message, "Access Granted! जनरेशन शुरू हो रही है...")
-        bot.send_message(ADMIN_ID, f"🔔 अलर्ट: यूजर @{message.from_user.username} ने जनरेशन शुरू की।")
+        bot.reply_to(message, "✅ Access Granted! जनरेशन शुरू हो रही है...")
         
-        count = user_data[user_id]['count']
+        # यहाँ से सुनिश्चित करें कि logs खाली न हो
+        if 'logs' not in user_data[user_id]:
+            user_data[user_id]['logs'] = ""
+            
+        count = user_data[user_id].get('count', 0)
+        
         for i in range(count):
-            if user_data.get(user_id, {}).get('step') == 'stopped': break
+            # अगर यूजर ने स्टॉप दबाया
+            if user_data.get(user_id, {}).get('step') == 'stopped': 
+                break
             
             data = get_next_code()
             if not data:
-                bot.send_message(user_id, "❌ स्टॉक खत्म हो गया है! एडमिन से संपर्क करें।")
+                bot.send_message(user_id, "❌ स्टॉक खत्म हो गया है!")
                 break
                 
-            bot.send_message(user_id, f"> [⏳] कोड {i+1} प्रोसेसिंग...")
-            time.sleep(5)
-            log_to_db(data['code'], data['pin'], message.from_user.username)
-            result = f"Voucher: {data['code']} | PIN: {data['pin']} | Balance: ₹100"
+            # कोड भेजना
+            result = f"Voucher: {data['code']} | PIN: {data['pin']}"
             user_data[user_id]['logs'] += result + "\n"
-            bot.send_message(user_id, f"> {result}")
-        else:
-            bot.send_message(user_id, "✅ बैच पूरा हुआ।", reply_markup=get_main_markup())
+            
+            bot.send_message(user_id, f"🎟 कोड {i+1}:\n{result}")
+            log_to_db(data['code'], data['pin'], message.from_user.username)
+            
+            time.sleep(1) # यहाँ टाइम कम करें ताकि बॉट रिस्पॉन्सिव रहे
+            
+        bot.send_message(user_id, "🏁 बैच पूरा हुआ।", reply_markup=get_main_markup())
+        user_data[user_id]['step'] = 'finished'
     else:
-        bot.reply_to(message, "गलत Access Code! फिर से प्रयास करें।")
+        bot.reply_to(message, "❌ गलत Access Code!")
 
 while True:
     try:
