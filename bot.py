@@ -7,9 +7,9 @@ import string
 from telebot import types
 
 # --- SETTINGS ---
-BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN_HERE'
-ADMIN_ID = 'YOUR_TELEGRAM_ID_HERE' 
-ADMIN_USERNAME = "@YourUsername" 
+BOT_TOKEN = '8522964450:AAFPAOqiv6cpt2lF8JhRT6_UGw_1LjQwE7U'
+ADMIN_ID = '1102140969' 
+ADMIN_USERNAME = "@CuteGirl21459" 
 MAX_LIMIT = 20 
 
 bot = telebot.TeleBot(BOT_TOKEN)
