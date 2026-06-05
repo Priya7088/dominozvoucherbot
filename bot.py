@@ -44,94 +44,106 @@ def get_next_code():
 
 init_db()
 
-# --- BOT LOGIC ---
-def get_main_markup():
-    markup = types.InlineKeyboardMarkup()
+# --- KEYBOARDS ---
+def get_main_keyboard():
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(
-        types.InlineKeyboardButton("Generate Codes", callback_data="gen_menu"),
-        types.InlineKeyboardButton("Pay ₹5000 (QR)", callback_data="pay_now"),
-        types.InlineKeyboardButton("Stop", callback_data="stop_gen"),
-        types.InlineKeyboardButton("Copy Codes", callback_data="copy_all"),
-        types.InlineKeyboardButton("Support", url=f"https://t.me/{ADMIN_USERNAME.replace('@','')}")
+        types.KeyboardButton("⚡ Generate Codes"),
+        types.KeyboardButton("💰 Payment"),
+        types.KeyboardButton("🛑 Stop"),
+        types.KeyboardButton("📋 Copy Codes"),
+        types.KeyboardButton("📞 Support"),
+        types.KeyboardButton("⚠️ Disclaimer")
     )
     return markup
 
+def get_back_keyboard():
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(types.KeyboardButton("🏠 Main Menu"))
+    return markup
+
+# --- BOT LOGIC ---
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "नमस्ते! Domino Generator कंट्रोल पैनल:", reply_markup=get_main_markup())
+    user_data[message.chat.id] = {}
+    bot.reply_to(message, "नमस्ते! Domino Generator कंट्रोल पैनल में आपका स्वागत है:", reply_markup=get_main_keyboard())
 
-@bot.callback_query_handler(func=lambda call: True)
-def callback_handler(call):
-    user_id = call.message.chat.id
-    if call.data == "gen_menu":
+@bot.message_handler(func=lambda message: True)
+def handle_message(message):
+    user_id = message.chat.id
+    text = message.text
+
+    # 1. Main Menu Logic
+    if text == "🏠 Main Menu":
+        user_data[user_id] = {}
+        bot.send_message(user_id, "वापस मेनू में आपका स्वागत है:", reply_markup=get_main_keyboard())
+        return
+
+    # 2. Main Button Actions
+    elif text == "⚡ Generate Codes":
         user_data[user_id] = {'step': 'waiting_count', 'logs': user_data.get(user_id, {}).get('logs', '')}
-        bot.send_message(user_id, f"कितने कोड जनरेट करने हैं? (Max {MAX_LIMIT}):")
-    
-    elif call.data == "pay_now":
+        bot.send_message(user_id, f"कितने कोड जनरेट करने हैं? (Max {MAX_LIMIT}):", reply_markup=get_back_keyboard())
+
+    elif text == "💰 Payment":
         if os.path.exists('qr.png'):
             with open('qr.png', 'rb') as photo:
-                bot.send_photo(user_id, photo, caption="₹5000 का भुगतान करें। पेमेंट स्क्रीनशॉट मुझे भेजें, मैं आपको Access Code दूंगा।")
+                bot.send_photo(user_id, photo, caption="₹5000 का भुगतान करें।")
         else:
-            bot.send_message(user_id, "QR कोड उपलब्ध नहीं है, एडमिन से संपर्क करें।")
-            
-    elif call.data == "stop_gen":
+            bot.send_message(user_id, "QR कोड उपलब्ध नहीं है।")
+
+    elif text == "🛑 Stop":
         if user_id in user_data: user_data[user_id]['step'] = 'stopped'
-        bot.answer_callback_query(call.id, "Generation रोक दी गई है।")
-    elif call.data == "copy_all":
+        bot.send_message(user_id, "Generation रोक दी गई है।")
+
+    elif text == "📋 Copy Codes":
         logs = user_data.get(user_id, {}).get('logs', "कोई कोड नहीं है।")
         bot.send_message(user_id, f"कॉपी के लिए सभी कोड्स:\n\n{logs}")
 
-@bot.message_handler(func=lambda message: user_data.get(message.chat.id, {}).get('step') == 'waiting_count')
-def get_count(message):
-    user_id = message.chat.id
-    try:
-        count = int(message.text)
-        if count > MAX_LIMIT:
-            bot.reply_to(message, f"सीमा पार! कृपया {MAX_LIMIT} या उससे कम संख्या डालें।")
-            return
-        user_data[user_id].update({'count': count, 'step': 'waiting_code'})
-        bot.reply_to(message, "20-डिजिट का Access Code दर्ज करें:")
-    except ValueError:
-        bot.reply_to(message, "कृपया केवल संख्या लिखें।")
+    elif text == "📞 Support":
+        support_url = f"https://t.me/{ADMIN_USERNAME.replace('@','')}"
+        bot.send_message(user_id, f"किसी भी समस्या के लिए यहाँ संपर्क करें:\n{support_url}")
 
-@bot.message_handler(func=lambda message: user_data.get(message.chat.id, {}).get('step') == 'waiting_code')
-def verify_code(message):
-    user_id = message.chat.id
-    if message.text == ACCESS_CODE:
-        bot.reply_to(message, "✅ Access Granted! जनरेशन शुरू हो रही है...")
-        
-        # यहाँ से सुनिश्चित करें कि logs खाली न हो
-        if 'logs' not in user_data[user_id]:
-            user_data[user_id]['logs'] = ""
-            
-        count = user_data[user_id].get('count', 0)
-        
-        for i in range(count):
-            # अगर यूजर ने स्टॉप दबाया
-            if user_data.get(user_id, {}).get('step') == 'stopped': 
-                break
-            
-            data = get_next_code()
-            if not data:
-                bot.send_message(user_id, "❌ स्टॉक खत्म हो गया है!")
-                break
-                
-            # कोड भेजना
-            result = f"Voucher: {data['code']} | PIN: {data['pin']}"
-            user_data[user_id]['logs'] += result + "\n"
-            
-            bot.send_message(user_id, f"🎟 कोड {i+1}:\n{result}")
-            log_to_db(data['code'], data['pin'], message.from_user.username)
-            
-            time.sleep(1) # यहाँ टाइम कम करें ताकि बॉट रिस्पॉन्सिव रहे
-            
-        bot.send_message(user_id, "🏁 बैच पूरा हुआ।", reply_markup=get_main_markup())
-        user_data[user_id]['step'] = 'finished'
-    else:
-        bot.reply_to(message, "❌ गलत Access Code!")
+    elif text == "⚠️ Disclaimer":
+        disclaimer_text = (
+            "⚠️ **Disclaimer & Support:**\n\n"
+            "बॉट से जनरेट किए हुए सारे कोड वैलिड नहीं होंगे "
+            "आपको खुद चेक करना होगा कोड वैलिड है या नहीं \n\n"
+            "आपको डोमिनोज के kart वैल्यू पर जाना है वाउचर , "
+            "कोड अप्लाई करके देखना है जितने कोड आपको वैलिड दिखाई दे "
+            "उनको सेव करलेना हम जल्दी ही वोट में अपडेट करेंगे चेकर लगाने की "
+        )
+        bot.send_message(user_id, disclaimer_text, parse_mode="Markdown")
 
-while True:
-    try:
-        bot.polling(none_stop=True)
-    except Exception as e:
-        time.sleep(15)
+    # 3. Steps Processing
+    elif user_data.get(user_id, {}).get('step') == 'waiting_count':
+        try:
+            count = int(text)
+            if count > MAX_LIMIT:
+                bot.reply_to(message, f"अधिकतम {MAX_LIMIT} तक ही चुन सकते हैं।")
+                return
+            user_data[user_id].update({'count': count, 'step': 'waiting_code'})
+            bot.reply_to(message, "20-डिजिट का Access Code दर्ज करें:")
+        except ValueError:
+            bot.reply_to(message, "कृपया केवल संख्या लिखें।")
+
+    elif user_data.get(user_id, {}).get('step') == 'waiting_code':
+        if text == ACCESS_CODE:
+            bot.reply_to(message, "✅ जनरेशन शुरू हो रही है...")
+            count = user_data[user_id].get('count', 0)
+            for i in range(count):
+                if user_data.get(user_id, {}).get('step') == 'stopped': break
+                data = get_next_code()
+                if not data:
+                    bot.send_message(user_id, "❌ स्टॉक खत्म हो गया है!")
+                    break
+                result = f"Voucher: {data['code']} | PIN: {data['pin']}"
+                user_data[user_id]['logs'] += result + "\n"
+                bot.send_message(user_id, f"🎟 कोड {i+1}:\n{result}")
+                log_to_db(data['code'], data['pin'], message.from_user.username)
+                time.sleep(1)
+            bot.send_message(user_id, "🏁 बैच पूरा हुआ।", reply_markup=get_main_keyboard())
+            user_data[user_id]['step'] = 'finished'
+        else:
+            bot.reply_to(message, "❌ गलत Access Code!")
+
+bot.polling(none_stop=True)
