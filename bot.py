@@ -138,10 +138,10 @@ def handle_message(message):
                     break
                 result = f"Voucher: {data['code']} | PIN: {data['pin']}"
                 user_data[user_id]['logs'] += result + "\n"
-                bot.send_message(user_id, f"🎟 कोड {i+1}:\n{result}")
+                bot.send_message(user_id, f"🍕 कोड {i+1}:\n{result}")
                 log_to_db(data['code'], data['pin'], message.from_user.username)
                 time.sleep(1)
-            bot.send_message(user_id, "🏁 बैच पूरा हुआ।", reply_markup=get_main_keyboard())
+            bot.send_message(user_id, "🍕 Genrate successfully", reply_markup=get_main_keyboard())
             user_data[user_id]['step'] = 'finished'
         else:
             bot.reply_to(message, "❌ गलत Access Code!")
